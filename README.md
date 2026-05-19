@@ -453,4 +453,5 @@ MIT License - Libre d'utilisation à des fins personnelles, éducatives et comme
 
 ---
 
+**Auteur** : Wassim Lazim  
 **Dernière mise à jour** : Mai 2026
