@@ -6,7 +6,7 @@ Système de supervision et gestion d'irrigation basé sur l'humidité du sol, fo
 
 Voici une démonstration complète du système en action :
 
-![Démonstration du système d'irrigation intelligent](assets/gif-demo.mp4)
+![Démonstration du système d'irrigation intelligent](assets/gif-demo.gif)
 
 **Ci-dessus** : Interface de monitoring en temps réel affichant l'humidité actuelle, l'historique graphique, les statistiques et les recommandations d'irrigation automatisées.
 
@@ -79,14 +79,14 @@ smart-irrigation-system/
 ├── index.html                 # Interface web (HTML5/CSS3/JavaScript)
 ├── start.bat                  # Script de démarrage (Windows)
 ├── README.md                  # Documentation
-├── assets/                    # Ressources (images, vidéo)
+├── assets/                    # Ressources (images, GIF)
 │   ├── detecteur.jpeg         # Photo du capteur
 │   ├── pompe.jpeg             # Photo de la pompe
 │   ├── BBC_microbit.png       # Image de la carte
 │   ├── mongodb.png            # Logo MongoDB
 │   ├── logs.png               # Interface des logs
 │   ├── date.png               # Gestion des timestamps
-│   └── gif-demo.mp4           # Démonstration vidéo
+│   └── gif-demo.gif           # Démonstration animée
 │
 └── backend/
     ├── app.py                 # API Flask
