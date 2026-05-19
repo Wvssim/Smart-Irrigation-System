@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Irrigation · Supervision Sol</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --card:     #1c2128;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --teal:     #1d9e75;
+      --teal-lt:  #56d8a8;
+      --amber:    #d29922;
+      --red:      #da3633;
+      --blue:     #1f6feb;
+      --font:     'Segoe UI', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0 0 40px;
+    }
+ 
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -.2px;
+    }
+    header h1 span { color: var(--teal-lt); }
+    #status-dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--teal);
+      display: inline-block; margin-right: 8px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(29,158,117,.5); }
+      50%      { box-shadow: 0 0 0 6px rgba(29,158,117,0); }
+    }
+    #last-update { font-size: 12px; color: var(--muted); }
+ 
+    /* ── Alert banner ── */
+    #alert-banner {
+      display: none;
+      margin: 20px 32px 0;
+      padding: 12px 18px;
+      background: rgba(218,54,51,.12);
+      border: 1px solid rgba(218,54,51,.4);
+      border-radius: 8px;
+      color: #ff7b72;
+      font-size: 14px;
+    }
+    #alert-banner.show { display: flex; align-items: center; gap: 10px; }
+ 
+    /* ── Grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      padding: 24px 32px 0;
+    }
+ 
+    /* ── KPI Cards ── */
+    .kpi {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+    }
+    .kpi .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .kpi .value {
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--teal-lt);
+      transition: color .4s;
+    }
+    .kpi .value.alert { color: var(--red); }
+    .kpi .sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+ 
+    /* ── Gauge ── */
+    .gauge-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .gauge-wrap .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 14px;
+      align-self: flex-start;
+    }
+    .gauge {
+      position: relative;
+      width: 140px; height: 80px;
+      overflow: visible;
+    }
+    .gauge svg { overflow: visible; }
+ 
+    /* ── Chart section ── */
+    .chart-section {
+      margin: 20px 32px 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+    }
+    .chart-section h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 16px;
+    }
+    .chart-section canvas { max-height: 220px; }
+ 
+    /* ── Logic/Control Section ── */
+    .logic-section {
+      margin: 20px 32px 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+    }
+    .logic-section h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 16px;
+    }
+    .logic-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .logic-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .logic-item label {
+      display: block;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .logic-item input {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .logic-item input:focus {
+      outline: none;
+      border-color: var(--teal);
+      box-shadow: 0 0 0 2px rgba(29,158,117,.2);
+    }
+    .toggle-switch {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .toggle-switch input[type="checkbox"] {
+      width: 40px;
+      height: 24px;
+      cursor: pointer;
+      accent-color: var(--teal);
+    }
+    .toggle-switch label {
+      margin: 0;
+      cursor: pointer;
+      font-size: 12px;
+      text-transform: none;
+      color: var(--text);
+    }
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .3s;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    button.primary {
+      background: var(--teal);
+      color: var(--bg);
+    }
+    button.primary:hover {
+      background: var(--teal-lt);
+    }
+    button.primary:active {
+      transform: scale(0.98);
+    }
+    button.secondary {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    button.secondary:hover {
+      background: var(--border);
+    }
+    .analysis-box {
+      background: var(--surface);
+      border-left: 3px solid var(--teal);
+      border-radius: 6px;
+      padding: 12px 14px;
+      margin-top: 16px;
+      font-size: 12px;
+    }
+    .analysis-box.critical {
+      border-left-color: var(--red);
+      background: rgba(218,54,51,.1);
+    }
+    .analysis-box.warning {
+      border-left-color: var(--amber);
+      background: rgba(210,153,34,.1);
+    }
+    .analysis-label {
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 4px;
+    }
+    .analysis-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    .status-badge.ok {
+      background: rgba(29,158,117,.18);
+      color: var(--teal-lt);
+    }
+    .status-badge.warning {
+      background: rgba(210,153,34,.18);
+      color: #e3b341;
+    }
+    .status-badge.critical {
+      background: rgba(218,54,51,.18);
+      color: #ff7b72;
+    }
+ 
+    /* ── Table section ── */
+    .table-section {
+      margin: 20px 32px 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .table-section h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left;
+      padding: 10px 22px;
+      font-weight: 500;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      background: var(--surface);
+    }
+    td { padding: 10px 22px; border-top: 1px solid var(--border); }
+    tr:hover td { background: rgba(255,255,255,.03); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge.ok    { background: rgba(29,158,117,.18); color: var(--teal-lt); }
+    .badge.low   { background: rgba(218,54,51,.18);  color: #ff7b72; }
+    .badge.mid   { background: rgba(210,153,34,.18); color: #e3b341; }
+  </style>
+</head>
+<body>
+ 
+<header>
+  <h1><span id="status-dot"></span>Irrigation · <span>Supervision Sol</span></h1>
+  <div id="last-update">Chargement…</div>
+</header>
+ 
+<!-- Alert banner -->
+<div id="alert-banner">
+  ⚠️ <strong>Alerte sécheresse :</strong>&nbsp;L'humidité est inférieure à 30 % — Irrigation recommandée.
+</div>
+ 
+<!-- KPI Cards -->
+<div class="grid">
+  <div class="kpi">
+    <div class="label">Humidité actuelle</div>
+    <div class="value" id="val-current">—</div>
+    <div class="sub" id="sub-current">—</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Moyenne (50 mesures)</div>
+    <div class="value" id="val-avg" style="color:var(--blue)">—</div>
+    <div class="sub">dernières données</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Minimum</div>
+    <div class="value" id="val-min" style="color:var(--red)">—</div>
+    <div class="sub">valeur basse</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Maximum</div>
+    <div class="value" id="val-max" style="color:var(--teal-lt)">—</div>
+    <div class="sub">valeur haute</div>
+  </div>
+  <!-- Gauge -->
+  <div class="gauge-wrap">
+    <div class="label">Jauge humidité</div>
+    <div class="gauge">
+      <svg viewBox="0 0 140 80" width="140" height="80">
+        <!-- Track -->
+        <path d="M10 75 A60 60 0 0 1 130 75" fill="none" stroke="#30363d" stroke-width="12" stroke-linecap="round"/>
+        <!-- Fill -->
+        <path id="gauge-arc" d="M10 75 A60 60 0 0 1 130 75" fill="none" stroke="var(--teal)" stroke-width="12"
+              stroke-linecap="round" stroke-dasharray="0 188" style="transition:stroke-dasharray .6s ease, stroke .4s"/>
+        <!-- Threshold marker at 30% -->
+        <line id="thresh-mark" x1="10" y1="75" x2="22" y2="75"
+              stroke="var(--red)" stroke-width="2" stroke-dasharray="3 2"
+              transform="rotate(-126 70 75)"/>
+        <text x="70" y="60" text-anchor="middle" fill="#8b949e" font-size="10" font-family="sans-serif">seuil 30%</text>
+        <text id="gauge-label" x="70" y="78" text-anchor="middle" fill="#e6edf3"
+              font-size="18" font-weight="700" font-family="sans-serif">—</text>
+      </svg>
+    </div>
+  </div>
+</div>
+ 
+<!-- Chart -->
+<div class="chart-section">
+  <h2>Historique temps réel</h2>
+  <canvas id="chart-humidity"></canvas>
+</div>
+
+<!-- Logic & Analysis Section -->
+<div class="logic-section">
+  <h2>🤖 Logique d'Irrigation & Analyse</h2>
+  
+  <div class="logic-grid">
+    <div class="logic-item">
+      <label>Seuil Sec (%)</label>
+      <input type="number" id="dry-threshold" min="0" max="100" value="30"/>
+    </div>
+    <div class="logic-item">
+      <label>Min Optimal (%)</label>
+      <input type="number" id="optimal-min" min="0" max="100" value="45"/>
+    </div>
+    <div class="logic-item">
+      <label>Max Optimal (%)</label>
+      <input type="number" id="optimal-max" min="0" max="100" value="75"/>
+    </div>
+    <div class="logic-item">
+      <label>Seuil Humide (%)</label>
+      <input type="number" id="wet-threshold" min="0" max="100" value="80"/>
+    </div>
+  </div>
+
+  <div class="toggle-switch">
+    <input type="checkbox" id="auto-irrigation" checked/>
+    <label for="auto-irrigation">Irrigation automatique activée</label>
+  </div>
+
+  <div class="btn-group">
+    <button class="primary" onclick="updateLogic()">💾 Sauvegarder paramètres</button>
+    <button class="secondary" onclick="analyzeNow()">🔍 Analyser maintenant</button>
+    <button class="secondary" onclick="seedDemoData()">📊 Charger démo</button>
+  </div>
+
+  <div id="analysis-result" class="analysis-box" style="display:none;">
+    <div class="analysis-label">Status & Recommandation</div>
+    <div class="analysis-value" id="analysis-status">—</div>
+    <div class="analysis-value" id="analysis-recommendation" style="margin-top:6px;">—</div>
+    <span id="urgency-badge" class="status-badge">—</span>
+  </div>
+</div>
+ 
+<!-- Table -->
+<div class="table-section">
+  <h2>Dernières mesures</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Timestamp capteur</th>
+        <th>Humidité</th>
+        <th>Statut</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">Chargement…</td></tr>
+    </tbody>
+  </table>
+</div>
+ 
+<script>
+  /* ── CONFIG ─────────────────────────────────────────────────────────────── */
+  const API = "http://localhost:5000/api";
+  const REFRESH_MS = 5000;   // Rafraîchissement toutes les 5s
+  let ALERT_THRESHOLD = 30;
+  let currentLogic = null;
+ 
+  /* ── CHART ──────────────────────────────────────────────────────────────── */
+  const ctx = document.getElementById("chart-humidity").getContext("2d");
+  const chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [{
+        label: "Humidité (%)",
+        data: [],
+        borderColor: "#1d9e75",
+        backgroundColor: "rgba(29,158,117,.08)",
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: "#1d9e75",
+        tension: 0.4,
+        fill: true
+      }, {
+        label: "Seuil alerte 30%",
+        data: [],
+        borderColor: "rgba(218,54,51,.5)",
+        borderDash: [5, 5],
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: false
+      }]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 300 },
+      plugins: {
+        legend: { labels: { color: "#8b949e", font: { size: 12 } } },
+        tooltip: { backgroundColor: "#1c2128", borderColor: "#30363d", borderWidth: 1 }
+      },
+      scales: {
+        x: {
+          ticks: { color: "#8b949e", font: { size: 11 }, maxTicksLimit: 10 },
+          grid:  { color: "#21262d" }
+        },
+        y: {
+          min: 0, max: 100,
+          ticks: {
+            color: "#8b949e", font: { size: 11 },
+            callback: v => v + "%"
+          },
+          grid: { color: "#21262d" }
+        }
+      }
+    }
+  });
+ 
+  /* ── GAUGE ──────────────────────────────────────────────────────────────── */
+  const GAUGE_TOTAL = 188; // longueur de l'arc ~180°
+  function updateGauge(pct) {
+    const filled = (pct / 100) * GAUGE_TOTAL;
+    const arc = document.getElementById("gauge-arc");
+    arc.setAttribute("stroke-dasharray", `${filled} ${GAUGE_TOTAL}`);
+    arc.style.stroke = pct < ALERT_THRESHOLD ? "var(--red)" : "#1d9e75";
+    document.getElementById("gauge-label").textContent = pct + "%";
+  }
+ 
+  /* ── STATUS BADGE ───────────────────────────────────────────────────────── */
+  function badgeHtml(h) {
+    if (h < 30)  return `<span class="badge low">Sec</span>`;
+    if (h < 60)  return `<span class="badge mid">Modéré</span>`;
+    return              `<span class="badge ok">Optimal</span>`;
+  }
+ 
+  /* ── FETCH LATEST ────────────────────────────────────────────────────────── */
+  async function fetchLatest() {
+    try {
+      const r = await fetch(`${API}/latest`);
+      if (!r.ok) throw new Error("API unreachable");
+      const d = await r.json();
+      const h = d.humidity;
+ 
+      document.getElementById("val-current").textContent = h + "%";
+      document.getElementById("val-current").className   = "value" + (h < ALERT_THRESHOLD ? " alert" : "");
+      document.getElementById("sub-current").textContent = "Mesure : " + d.timestamp;
+      document.getElementById("last-update").textContent = "Mis à jour : " + new Date().toLocaleTimeString("fr-FR");
+ 
+      updateGauge(h);
+ 
+      // Alert banner
+      const banner = document.getElementById("alert-banner");
+      if (h < ALERT_THRESHOLD) banner.classList.add("show");
+      else                     banner.classList.remove("show");
+ 
+    } catch (e) {
+      document.getElementById("last-update").textContent = "⚠ API hors ligne";
+    }
+  }
+ 
+  /* ── FETCH HISTORY ───────────────────────────────────────────────────────── */
+  async function fetchHistory() {
+    try {
+      const r = await fetch(`${API}/history`);
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+ 
+      // Chart — du plus ancien au plus récent
+      const sorted = [...data].reverse();
+      const labels = sorted.map(d => d.timestamp.slice(11, 19));
+      const values = sorted.map(d => d.humidity);
+ 
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = values;
+      chart.data.datasets[1].data = labels.map(() => 30);
+      chart.update();
+ 
+      // Table
+      const tbody = document.getElementById("table-body");
+      tbody.innerHTML = data.map((d, i) => `
+        <tr>
+          <td style="color:var(--muted)">${i + 1}</td>
+          <td>${d.timestamp}</td>
+          <td><strong>${d.humidity}%</strong></td>
+          <td>${badgeHtml(d.humidity)}</td>
+        </tr>
+      `).join("");
+ 
+    } catch (e) { /* silencieux */ }
+  }
+ 
+  /* ── FETCH STATS ─────────────────────────────────────────────────────────── */
+  async function fetchStats() {
+    try {
+      const r = await fetch(`${API}/stats`);
+      if (!r.ok) throw new Error();
+      const s = await r.json();
+      document.getElementById("val-avg").textContent = s.avg + "%";
+      document.getElementById("val-min").textContent = s.min + "%";
+      document.getElementById("val-max").textContent = s.max + "%";
+    } catch (e) { /* silencieux */ }
+  }
+
+  /* ── FETCH LOGIC ──────────────────────────────────────────────────────── */
+  async function fetchLogic() {
+    try {
+      const r = await fetch(`${API}/logic`);
+      if (!r.ok) throw new Error();
+      const logic = await r.json();
+      currentLogic = logic;
+      
+      document.getElementById("dry-threshold").value = logic.dry_threshold;
+      document.getElementById("optimal-min").value = logic.optimal_min;
+      document.getElementById("optimal-max").value = logic.optimal_max;
+      document.getElementById("wet-threshold").value = logic.wet_threshold;
+      document.getElementById("auto-irrigation").checked = logic.auto_irrigation;
+      
+      ALERT_THRESHOLD = logic.dry_threshold;
+    } catch (e) { /* silencieux */ }
+  }
+
+  /* ── UPDATE LOGIC ─────────────────────────────────────────────────────── */
+  async function updateLogic() {
+    try {
+      const logic = {
+        dry_threshold: parseInt(document.getElementById("dry-threshold").value),
+        optimal_min: parseInt(document.getElementById("optimal-min").value),
+        optimal_max: parseInt(document.getElementById("optimal-max").value),
+        wet_threshold: parseInt(document.getElementById("wet-threshold").value),
+        auto_irrigation: document.getElementById("auto-irrigation").checked
+      };
+
+      const r = await fetch(`${API}/logic`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(logic)
+      });
+
+      if (r.ok) {
+        ALERT_THRESHOLD = logic.dry_threshold;
+        alert("✓ Paramètres sauvegardés avec succès");
+      }
+    } catch (e) {
+      alert("✗ Erreur lors de la sauvegarde");
+    }
+  }
+
+  /* ── ANALYZE NOW ──────────────────────────────────────────────────────── */
+  async function analyzeNow() {
+    try {
+      const r = await fetch(`${API}/analyze`);
+      if (!r.ok) throw new Error();
+      const analysis = await r.json();
+
+      const box = document.getElementById("analysis-result");
+      const status = document.getElementById("analysis-status");
+      const rec = document.getElementById("analysis-recommendation");
+      const badge = document.getElementById("urgency-badge");
+
+      status.textContent = `📊 Statut: ${analysis.status}`;
+      rec.textContent = `💡 ${analysis.recommendation}`;
+      
+      let urgencyClass = "ok";
+      if (analysis.urgency === "CRITIQUE") urgencyClass = "critical";
+      else if (analysis.urgency === "HAUTE" || analysis.urgency === "MOYENNE") urgencyClass = "warning";
+      
+      badge.textContent = `Urgence: ${analysis.urgency}`;
+      badge.className = `status-badge ${urgencyClass}`;
+      
+      box.style.display = "block";
+      if (analysis.urgency === "CRITIQUE") box.className = "analysis-box critical";
+      else if (analysis.urgency !== "BASSE") box.className = "analysis-box warning";
+      else box.className = "analysis-box";
+    } catch (e) {
+      alert("✗ Erreur lors de l'analyse");
+    }
+  }
+
+  /* ── SEED DEMO DATA ───────────────────────────────────────────────────── */
+  async function seedDemoData() {
+    try {
+      const r = await fetch(`${API}/demo/seed`, { method: "POST" });
+      if (r.ok) {
+        alert("✓ Données de démo chargées");
+        refresh();
+      }
+    } catch (e) {
+      alert("✗ Erreur lors du chargement");
+    }
+  }
+ 
+  /* ── INIT ────────────────────────────────────────────────────────────────── */
+  async function refresh() {
+    await Promise.all([fetchLatest(), fetchHistory(), fetchStats(), fetchLogic()]);
+  }
+ 
+  // Essai API, fallback démo
+  fetch(`${API}/health`)
+    .then(r => r.json())
+    .then(() => {
+      refresh();
+      setInterval(refresh, REFRESH_MS);
+    })
+    .catch(() => {
+      alert("Impossible de se connecter au serveur. Démarrez le backend avec: python backend/app.py");
+    });
+</script>
+</body>
+</html>

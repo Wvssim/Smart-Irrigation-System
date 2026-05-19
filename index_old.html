@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Irrigation · Supervision Sol</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --card:     #1c2128;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --teal:     #1d9e75;
+      --teal-lt:  #56d8a8;
+      --amber:    #d29922;
+      --red:      #da3633;
+      --blue:     #1f6feb;
+      --font:     'Segoe UI', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0 0 40px;
+    }
+ 
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -.2px;
+    }
+    header h1 span { color: var(--teal-lt); }
+    #status-dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--teal);
+      display: inline-block; margin-right: 8px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(29,158,117,.5); }
+      50%      { box-shadow: 0 0 0 6px rgba(29,158,117,0); }
+    }
+    #last-update { font-size: 12px; color: var(--muted); }
+ 
+    /* ── Alert banner ── */
+    #alert-banner {
+      display: none;
+      margin: 20px 32px 0;
+      padding: 12px 18px;
+      background: rgba(218,54,51,.12);
+      border: 1px solid rgba(218,54,51,.4);
+      border-radius: 8px;
+      color: #ff7b72;
+      font-size: 14px;
+    }
+    #alert-banner.show { display: flex; align-items: center; gap: 10px; }
+ 
+    /* ── Grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      padding: 24px 32px 0;
+    }
+ 
+    /* ── KPI Cards ── */
+    .kpi {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+    }
+    .kpi .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .kpi .value {
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--teal-lt);
+      transition: color .4s;
+    }
+    .kpi .value.alert { color: var(--red); }
+    .kpi .sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+ 
+    /* ── Gauge ── */
+    .gauge-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .gauge-wrap .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 14px;
+      align-self: flex-start;
+    }
+    .gauge {
+      position: relative;
+      width: 140px; height: 80px;
+      overflow: visible;
+    }
+    .gauge svg { overflow: visible; }
+ 
+    /* ── Chart section ── */
+    .chart-section {
+      margin: 20px 32px 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+    }
+    .chart-section h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 16px;
+    }
+    .chart-section canvas { max-height: 220px; }
+ 
+    /* ── Table section ── */
+    .table-section {
+      margin: 20px 32px 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .table-section h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left;
+      padding: 10px 22px;
+      font-weight: 500;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      background: var(--surface);
+    }
+    td { padding: 10px 22px; border-top: 1px solid var(--border); }
+    tr:hover td { background: rgba(255,255,255,.03); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge.ok    { background: rgba(29,158,117,.18); color: var(--teal-lt); }
+    .badge.low   { background: rgba(218,54,51,.18);  color: #ff7b72; }
+    .badge.mid   { background: rgba(210,153,34,.18); color: #e3b341; }
+  </style>
+</head>
+<body>
+ 
+<header>
+  <h1><span id="status-dot"></span>Irrigation · <span>Supervision Sol</span></h1>
+  <div id="last-update">Chargement…</div>
+</header>
+ 
+<!-- Alert banner -->
+<div id="alert-banner">
+  ⚠️ <strong>Alerte sécheresse :</strong>&nbsp;L'humidité est inférieure à 30 % — Irrigation recommandée.
+</div>
+ 
+<!-- KPI Cards -->
+<div class="grid">
+  <div class="kpi">
+    <div class="label">Humidité actuelle</div>
+    <div class="value" id="val-current">—</div>
+    <div class="sub" id="sub-current">—</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Moyenne (50 mesures)</div>
+    <div class="value" id="val-avg" style="color:var(--blue)">—</div>
+    <div class="sub">dernières données</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Minimum</div>
+    <div class="value" id="val-min" style="color:var(--red)">—</div>
+    <div class="sub">valeur basse</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Maximum</div>
+    <div class="value" id="val-max" style="color:var(--teal-lt)">—</div>
+    <div class="sub">valeur haute</div>
+  </div>
+  <!-- Gauge -->
+  <div class="gauge-wrap">
+    <div class="label">Jauge humidité</div>
+    <div class="gauge">
+      <svg viewBox="0 0 140 80" width="140" height="80">
+        <!-- Track -->
+        <path d="M10 75 A60 60 0 0 1 130 75" fill="none" stroke="#30363d" stroke-width="12" stroke-linecap="round"/>
+        <!-- Fill -->
+        <path id="gauge-arc" d="M10 75 A60 60 0 0 1 130 75" fill="none" stroke="var(--teal)" stroke-width="12"
+              stroke-linecap="round" stroke-dasharray="0 188" style="transition:stroke-dasharray .6s ease, stroke .4s"/>
+        <!-- Threshold marker at 30% -->
+        <line id="thresh-mark" x1="10" y1="75" x2="22" y2="75"
+              stroke="var(--red)" stroke-width="2" stroke-dasharray="3 2"
+              transform="rotate(-126 70 75)"/>
+        <text x="70" y="60" text-anchor="middle" fill="#8b949e" font-size="10" font-family="sans-serif">seuil 30%</text>
+        <text id="gauge-label" x="70" y="78" text-anchor="middle" fill="#e6edf3"
+              font-size="18" font-weight="700" font-family="sans-serif">—</text>
+      </svg>
+    </div>
+  </div>
+</div>
+ 
+<!-- Chart -->
+<div class="chart-section">
+  <h2>Historique temps réel</h2>
+  <canvas id="chart-humidity"></canvas>
+</div>
+ 
+<!-- Table -->
+<div class="table-section">
+  <h2>Dernières mesures</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Timestamp capteur</th>
+        <th>Humidité</th>
+        <th>Statut</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">Chargement…</td></tr>
+    </tbody>
+  </table>
+</div>
+ 
+<script>
+  /* ── CONFIG ─────────────────────────────────────────────────────────────── */
+  const API = "http://localhost:5000/api";
+  const REFRESH_MS = 5000;   // Rafraîchissement toutes les 5s
+  const ALERT_THRESHOLD = 30;
+ 
+  /* ── CHART ──────────────────────────────────────────────────────────────── */
+  const ctx = document.getElementById("chart-humidity").getContext("2d");
+  const chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [{
+        label: "Humidité (%)",
+        data: [],
+        borderColor: "#1d9e75",
+        backgroundColor: "rgba(29,158,117,.08)",
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: "#1d9e75",
+        tension: 0.4,
+        fill: true
+      }, {
+        label: "Seuil alerte 30%",
+        data: [],
+        borderColor: "rgba(218,54,51,.5)",
+        borderDash: [5, 5],
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: false
+      }]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 300 },
+      plugins: {
+        legend: { labels: { color: "#8b949e", font: { size: 12 } } },
+        tooltip: { backgroundColor: "#1c2128", borderColor: "#30363d", borderWidth: 1 }
+      },
+      scales: {
+        x: {
+          ticks: { color: "#8b949e", font: { size: 11 }, maxTicksLimit: 10 },
+          grid:  { color: "#21262d" }
+        },
+        y: {
+          min: 0, max: 100,
+          ticks: {
+            color: "#8b949e", font: { size: 11 },
+            callback: v => v + "%"
+          },
+          grid: { color: "#21262d" }
+        }
+      }
+    }
+  });
+ 
+  /* ── GAUGE ──────────────────────────────────────────────────────────────── */
+  const GAUGE_TOTAL = 188; // longueur de l'arc ~180°
+  function updateGauge(pct) {
+    const filled = (pct / 100) * GAUGE_TOTAL;
+    const arc = document.getElementById("gauge-arc");
+    arc.setAttribute("stroke-dasharray", `${filled} ${GAUGE_TOTAL}`);
+    arc.style.stroke = pct < ALERT_THRESHOLD ? "var(--red)" : "#1d9e75";
+    document.getElementById("gauge-label").textContent = pct + "%";
+  }
+ 
+  /* ── STATUS BADGE ───────────────────────────────────────────────────────── */
+  function badgeHtml(h) {
+    if (h < 30)  return `<span class="badge low">Sec</span>`;
+    if (h < 60)  return `<span class="badge mid">Modéré</span>`;
+    return              `<span class="badge ok">Optimal</span>`;
+  }
+ 
+  /* ── FETCH LATEST ────────────────────────────────────────────────────────── */
+  async function fetchLatest() {
+    try {
+      const r = await fetch(`${API}/latest`);
+      if (!r.ok) throw new Error("API unreachable");
+      const d = await r.json();
+      const h = d.humidity;
+ 
+      document.getElementById("val-current").textContent = h + "%";
+      document.getElementById("val-current").className   = "value" + (h < ALERT_THRESHOLD ? " alert" : "");
+      document.getElementById("sub-current").textContent = "Mesure : " + d.timestamp;
+      document.getElementById("last-update").textContent = "Mis à jour : " + new Date().toLocaleTimeString("fr-FR");
+ 
+      updateGauge(h);
+ 
+      // Alert banner
+      const banner = document.getElementById("alert-banner");
+      if (h < ALERT_THRESHOLD) banner.classList.add("show");
+      else                     banner.classList.remove("show");
+ 
+    } catch (e) {
+      document.getElementById("last-update").textContent = "⚠ API hors ligne (mode démo)";
+    }
+  }
+ 
+  /* ── FETCH HISTORY ───────────────────────────────────────────────────────── */
+  async function fetchHistory() {
+    try {
+      const r = await fetch(`${API}/history`);
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+ 
+      // Chart — du plus ancien au plus récent
+      const sorted = [...data].reverse();
+      const labels = sorted.map(d => d.timestamp.slice(11, 19));
+      const values = sorted.map(d => d.humidity);
+ 
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = values;
+      chart.data.datasets[1].data = labels.map(() => 30);
+      chart.update();
+ 
+      // Table
+      const tbody = document.getElementById("table-body");
+      tbody.innerHTML = data.map((d, i) => `
+        <tr>
+          <td style="color:var(--muted)">${i + 1}</td>
+          <td>${d.timestamp}</td>
+          <td><strong>${d.humidity}%</strong></td>
+          <td>${badgeHtml(d.humidity)}</td>
+        </tr>
+      `).join("");
+ 
+    } catch (e) { /* silencieux */ }
+  }
+ 
+  /* ── FETCH STATS ─────────────────────────────────────────────────────────── */
+  async function fetchStats() {
+    try {
+      const r = await fetch(`${API}/stats`);
+      if (!r.ok) throw new Error();
+      const s = await r.json();
+      document.getElementById("val-avg").textContent = s.avg + "%";
+      document.getElementById("val-min").textContent = s.min + "%";
+      document.getElementById("val-max").textContent = s.max + "%";
+    } catch (e) { /* silencieux */ }
+  }
+ 
+  /* ── DÉMO (sans API) ─────────────────────────────────────────────────────── */
+  function runDemo() {
+    let t = 0;
+    const labels = [], values = [];
+    for (let i = 49; i >= 0; i--) {
+      const h = Math.floor(25 + Math.random() * 55);
+      const d = new Date(Date.now() - i * 10000);
+      labels.push(d.toLocaleTimeString("fr-FR"));
+      values.push(h);
+    }
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = values;
+    chart.data.datasets[1].data = labels.map(() => 30);
+    chart.update();
+ 
+    const last = values[values.length - 1];
+    document.getElementById("val-current").textContent = last + "%";
+    document.getElementById("val-current").className   = "value" + (last < ALERT_THRESHOLD ? " alert" : "");
+    document.getElementById("sub-current").textContent = "Mode démonstration";
+    updateGauge(last);
+ 
+    const avg = Math.round(values.reduce((a,b)=>a+b,0)/values.length);
+    document.getElementById("val-avg").textContent = avg + "%";
+    document.getElementById("val-min").textContent = Math.min(...values) + "%";
+    document.getElementById("val-max").textContent = Math.max(...values) + "%";
+ 
+    const tbody = document.getElementById("table-body");
+    tbody.innerHTML = values.slice(-15).reverse().map((h, i) => `
+      <tr>
+        <td style="color:var(--muted)">${i + 1}</td>
+        <td>${labels[labels.length - 1 - i]}</td>
+        <td><strong>${h}%</strong></td>
+        <td>${badgeHtml(h)}</td>
+      </tr>
+    `).join("");
+ 
+    if (last < ALERT_THRESHOLD) document.getElementById("alert-banner").classList.add("show");
+  }
+ 
+  /* ── INIT ────────────────────────────────────────────────────────────────── */
+  async function refresh() {
+    await Promise.all([fetchLatest(), fetchHistory(), fetchStats()]);
+  }
+ 
+  // Essai API, fallback démo
+  fetch(`${API}/latest`)
+    .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+    .then(() => {
+      refresh();
+      setInterval(refresh, REFRESH_MS);
+    })
+    .catch(() => {
+      runDemo();
+      setInterval(runDemo, REFRESH_MS);
+    });
+</script>
+</body>
+</html>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --card:     #1c2128;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --teal:     #1d9e75;
+      --teal-lt:  #56d8a8;
+      --amber:    #d29922;
+      --red:      #da3633;
+      --blue:     #1f6feb;
+      --font:     'Segoe UI', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0 0 40px;
+    }
+ 
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -.2px;
+    }
+    header h1 span { color: var(--teal-lt); }
+    #status-dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--teal);
+      display: inline-block; margin-right: 8px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(29,158,117,.5); }
+      50%      { box-shadow: 0 0 0 6px rgba(29,158,117,0); }
+    }
+    #last-update { font-size: 12px; color: var(--muted); }
+ 
+    /* ── Alert banner ── */
+    #alert-banner {
+      display: none;
+      margin: 20px 32px 0;
+      padding: 12px 18px;
+      background: rgba(218,54,51,.12);
+      border: 1px solid rgba(218,54,51,.4);
+      border-radius: 8px;
+      color: #ff7b72;
+      font-size: 14px;
+    }
+    #alert-banner.show { display: flex; align-items: center; gap: 10px; }
+ 
+    /* ── Grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      padding: 24px 32px 0;
+    }
+ 
+    /* ── KPI Cards ── */
+    .kpi {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+    }
+    .kpi .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .kpi .value {
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--teal-lt);
+      transition: color .4s;
+    }
+    .kpi .value.alert { color: var(--red); }
+    .kpi .sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+ 
+    /* ── Gauge ── */
+    .gauge-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .gauge-wrap .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 14px;
+      align-self: flex-start;
+    }
+    .gauge {
+      position: relative;
+      width: 140px; height: 80px;
+      overflow: visible;
+    }
+    .gauge svg { overflow: visible; }
+ 
+    /* ── Chart section ── */
+    .chart-section {
+      margin: 20px 32px 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+    }
+    .chart-section h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 16px;
+    }
+    .chart-section canvas { max-height: 220px; }
+ 
+    /* ── Table section ── */
+    .table-section {
+      margin: 20px 32px 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .table-section h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left;
+      padding: 10px 22px;
+      font-weight: 500;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      background: var(--surface);
+    }
+    td { padding: 10px 22px; border-top: 1px solid var(--border); }
+    tr:hover td { background: rgba(255,255,255,.03); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge.ok    { background: rgba(29,158,117,.18); color: var(--teal-lt); }
+    .badge.low   { background: rgba(218,54,51,.18);  color: #ff7b72; }
+    .badge.mid   { background: rgba(210,153,34,.18); color: #e3b341; }
+  </style>
+</head>
+<body>
+ 
+<header>
+  <h1><span id="status-dot"></span>Irrigation · <span>Supervision Sol</span></h1>
+  <div id="last-update">Chargement…</div>
+</header>
+ 
+<!-- Alert banner -->
+<div id="alert-banner">
+  ⚠️ <strong>Alerte sécheresse :</strong>&nbsp;L'humidité est inférieure à 30 % — Irrigation recommandée.
+</div>
+ 
+<!-- KPI Cards -->
+<div class="grid">
+  <div class="kpi">
+    <div class="label">Humidité actuelle</div>
+    <div class="value" id="val-current">—</div>
+    <div class="sub" id="sub-current">—</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Moyenne (50 mesures)</div>
+    <div class="value" id="val-avg" style="color:var(--blue)">—</div>
+    <div class="sub">dernières données</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Minimum</div>
+    <div class="value" id="val-min" style="color:var(--red)">—</div>
+    <div class="sub">valeur basse</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Maximum</div>
+    <div class="value" id="val-max" style="color:var(--teal-lt)">—</div>
+    <div class="sub">valeur haute</div>
+  </div>
+  <!-- Gauge -->
+  <div class="gauge-wrap">
+    <div class="label">Jauge humidité</div>
+    <div class="gauge">
+      <svg viewBox="0 0 140 80" width="140" height="80">
+        <!-- Track -->
+        <path d="M10 75 A60 60 0 0 1 130 75" fill="none" stroke="#30363d" stroke-width="12" stroke-linecap="round"/>
+        <!-- Fill -->
+        <path id="gauge-arc" d="M10 75 A60 60 0 0 1 130 75" fill="none" stroke="var(--teal)" stroke-width="12"
+              stroke-linecap="round" stroke-dasharray="0 188" style="transition:stroke-dasharray .6s ease, stroke .4s"/>
+        <!-- Threshold marker at 30% -->
+        <line id="thresh-mark" x1="10" y1="75" x2="22" y2="75"
+              stroke="var(--red)" stroke-width="2" stroke-dasharray="3 2"
+              transform="rotate(-126 70 75)"/>
+        <text x="70" y="60" text-anchor="middle" fill="#8b949e" font-size="10" font-family="sans-serif">seuil 30%</text>
+        <text id="gauge-label" x="70" y="78" text-anchor="middle" fill="#e6edf3"
+              font-size="18" font-weight="700" font-family="sans-serif">—</text>
+      </svg>
+    </div>
+  </div>
+</div>
+ 
+<!-- Chart -->
+<div class="chart-section">
+  <h2>Historique temps réel</h2>
+  <canvas id="chart-humidity"></canvas>
+</div>
+ 
+<!-- Table -->
+<div class="table-section">
+  <h2>Dernières mesures</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Timestamp capteur</th>
+        <th>Humidité</th>
+        <th>Statut</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">Chargement…</td></tr>
+    </tbody>
+  </table>
+</div>
+ 
+<script>
+  /* ── CONFIG ─────────────────────────────────────────────────────────────── */
+  const API = "http://localhost:5000/api";
+  const REFRESH_MS = 5000;   // Rafraîchissement toutes les 5s
+  const ALERT_THRESHOLD = 30;
+ 
+  /* ── CHART ──────────────────────────────────────────────────────────────── */
+  const ctx = document.getElementById("chart-humidity").getContext("2d");
+  const chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [{
+        label: "Humidité (%)",
+        data: [],
+        borderColor: "#1d9e75",
+        backgroundColor: "rgba(29,158,117,.08)",
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: "#1d9e75",
+        tension: 0.4,
+        fill: true
+      }, {
+        label: "Seuil alerte 30%",
+        data: [],
+        borderColor: "rgba(218,54,51,.5)",
+        borderDash: [5, 5],
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: false
+      }]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 300 },
+      plugins: {
+        legend: { labels: { color: "#8b949e", font: { size: 12 } } },
+        tooltip: { backgroundColor: "#1c2128", borderColor: "#30363d", borderWidth: 1 }
+      },
+      scales: {
+        x: {
+          ticks: { color: "#8b949e", font: { size: 11 }, maxTicksLimit: 10 },
+          grid:  { color: "#21262d" }
+        },
+        y: {
+          min: 0, max: 100,
+          ticks: {
+            color: "#8b949e", font: { size: 11 },
+            callback: v => v + "%"
+          },
+          grid: { color: "#21262d" }
+        }
+      }
+    }
+  });
+ 
+  /* ── GAUGE ──────────────────────────────────────────────────────────────── */
+  const GAUGE_TOTAL = 188; // longueur de l'arc ~180°
+  function updateGauge(pct) {
+    const filled = (pct / 100) * GAUGE_TOTAL;
+    const arc = document.getElementById("gauge-arc");
+    arc.setAttribute("stroke-dasharray", `${filled} ${GAUGE_TOTAL}`);
+    arc.style.stroke = pct < ALERT_THRESHOLD ? "var(--red)" : "#1d9e75";
+    document.getElementById("gauge-label").textContent = pct + "%";
+  }
+ 
+  /* ── STATUS BADGE ───────────────────────────────────────────────────────── */
+  function badgeHtml(h) {
+    if (h < 30)  return `<span class="badge low">Sec</span>`;
+    if (h < 60)  return `<span class="badge mid">Modéré</span>`;
+    return              `<span class="badge ok">Optimal</span>`;
+  }
+ 
+  /* ── FETCH LATEST ────────────────────────────────────────────────────────── */
+  async function fetchLatest() {
+    try {
+      const r = await fetch(`${API}/latest`);
+      if (!r.ok) throw new Error("API unreachable");
+      const d = await r.json();
+      const h = d.humidity;
+ 
+      document.getElementById("val-current").textContent = h + "%";
+      document.getElementById("val-current").className   = "value" + (h < ALERT_THRESHOLD ? " alert" : "");
+      document.getElementById("sub-current").textContent = "Mesure : " + d.timestamp;
+      document.getElementById("last-update").textContent = "Mis à jour : " + new Date().toLocaleTimeString("fr-FR");
+ 
+      updateGauge(h);
+ 
+      // Alert banner
+      const banner = document.getElementById("alert-banner");
+      if (h < ALERT_THRESHOLD) banner.classList.add("show");
+      else                     banner.classList.remove("show");
+ 
+    } catch (e) {
+      document.getElementById("last-update").textContent = "⚠ API hors ligne (mode démo)";
+    }
+  }
+ 
+  /* ── FETCH HISTORY ───────────────────────────────────────────────────────── */
+  async function fetchHistory() {
+    try {
+      const r = await fetch(`${API}/history`);
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+ 
+      // Chart — du plus ancien au plus récent
+      const sorted = [...data].reverse();
+      const labels = sorted.map(d => d.timestamp.slice(11, 19));
+      const values = sorted.map(d => d.humidity);
+ 
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = values;
+      chart.data.datasets[1].data = labels.map(() => 30);
+      chart.update();
+ 
+      // Table
+      const tbody = document.getElementById("table-body");
+      tbody.innerHTML = data.map((d, i) => `
+        <tr>
+          <td style="color:var(--muted)">${i + 1}</td>
+          <td>${d.timestamp}</td>
+          <td><strong>${d.humidity}%</strong></td>
+          <td>${badgeHtml(d.humidity)}</td>
+        </tr>
+      `).join("");
+ 
+    } catch (e) { /* silencieux */ }
+  }
+ 
+  /* ── FETCH STATS ─────────────────────────────────────────────────────────── */
+  async function fetchStats() {
+    try {
+      const r = await fetch(`${API}/stats`);
+      if (!r.ok) throw new Error();
+      const s = await r.json();
+      document.getElementById("val-avg").textContent = s.avg + "%";
+      document.getElementById("val-min").textContent = s.min + "%";
+      document.getElementById("val-max").textContent = s.max + "%";
+    } catch (e) { /* silencieux */ }
+  }
+ 
+  /* ── DÉMO (sans API) ─────────────────────────────────────────────────────── */
+  function runDemo() {
+    let t = 0;
+    const labels = [], values = [];
+    for (let i = 49; i >= 0; i--) {
+      const h = Math.floor(25 + Math.random() * 55);
+      const d = new Date(Date.now() - i * 10000);
+      labels.push(d.toLocaleTimeString("fr-FR"));
+      values.push(h);
+    }
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = values;
+    chart.data.datasets[1].data = labels.map(() => 30);
+    chart.update();
+ 
+    const last = values[values.length - 1];
+    document.getElementById("val-current").textContent = last + "%";
+    document.getElementById("val-current").className   = "value" + (last < ALERT_THRESHOLD ? " alert" : "");
+    document.getElementById("sub-current").textContent = "Mode démonstration";
+    updateGauge(last);
+ 
+    const avg = Math.round(values.reduce((a,b)=>a+b,0)/values.length);
+    document.getElementById("val-avg").textContent = avg + "%";
+    document.getElementById("val-min").textContent = Math.min(...values) + "%";
+    document.getElementById("val-max").textContent = Math.max(...values) + "%";
+ 
+    const tbody = document.getElementById("table-body");
+    tbody.innerHTML = values.slice(-15).reverse().map((h, i) => `
+      <tr>
+        <td style="color:var(--muted)">${i + 1}</td>
+        <td>${labels[labels.length - 1 - i]}</td>
+        <td><strong>${h}%</strong></td>
+        <td>${badgeHtml(h)}</td>
+      </tr>
+    `).join("");
+ 
+    if (last < ALERT_THRESHOLD) document.getElementById("alert-banner").classList.add("show");
+  }
+ 
+  /* ── INIT ────────────────────────────────────────────────────────────────── */
+  async function refresh() {
+    await Promise.all([fetchLatest(), fetchHistory(), fetchStats()]);
+  }
+ 
+  // Essai API, fallback démo
+  fetch(`${API}/latest`)
+    .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+    .then(() => {
+      refresh();
+      setInterval(refresh, REFRESH_MS);
+    })
+    .catch(() => {
+      runDemo();
+      setInterval(runDemo, REFRESH_MS);
+    });
+</script>
+</body>
+</html>*
